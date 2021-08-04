@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}
+  Записи сообщества {{ group.title }} | Yatube
+{% endblock %}
+{% block content %} 
+  <div class="container py-5"> 
+    <h1>{{ group }}</h1> 
+    <p> 
+      {{ group.description }} 
+    </p> 
+    {% for post in page %} 
+      <article> 
+        <ul> 
+          <li> 
+            {% include 'posts/includes/author_card.html'%}
+          </li> 
+          <li> 
+            Дата публикации: {{ post.pub_date|date:"d E Y" }} 
+          </li> 
+        </ul> 
+        <p>{{ post.text }}</p>
+        <a href="{% url 'posts:post_detail' post.author.username post.pk %}">подробная инормация </a>
+      </article> 
+      <hr>
+    {% endfor %}
+    {% include 'posts/includes/paginator.html' %}
+  </div> 
+{% endblock %}  
