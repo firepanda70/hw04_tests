@@ -1,16 +1,53 @@
+"""
+Модуль предназначен для тестирования view-функций.
+"""
+
 import datetime as dt
 from math import ceil
 
-from django.contrib.auth import get_user_model
+from django import forms
 from django.test import Client, TestCase
 from django.urls import reverse
-from django import forms
 
-from posts.models import Post, Group
+from posts.models import Group, Post, User
 
-User = get_user_model()
 # меньше 1 рабоать не будет :)
-TASK_COUNT = 15
+POSTS_COUNT = 15
+POST_PER_PAGE_COUNT = 10
+
+TEST_USER_USERNAME = 'amogus'
+TEST_GROUP_TITLE = 'Заголовок'
+TEST_GROUP_SLUG = 'test-slug'
+TEST_GROUP_DESC = 'Описание'
+TEST_POST_TEXT = 'Текст'
+TEST_EMPTY_GROUP_SLUG = 'empty_group'
+
+REQUEST_TEMPLATE_DICT = {
+    'homepage': (reverse('posts:index'), 'posts/index.html'),
+    'new_post': (reverse('posts:post_create'), 'posts/create_post.html'),
+    'group': (reverse('posts:group',
+                      kwargs={
+                          'slug': TEST_GROUP_SLUG
+                      }), 'posts/group.html'),
+    'empty_group': (reverse('posts:group',
+                            kwargs={
+                                'slug': TEST_EMPTY_GROUP_SLUG
+                            }), 'posts/group.html'),
+    'profile': (reverse('posts:profile',
+                        kwargs={
+                            'username': TEST_USER_USERNAME
+                        }), 'posts/profile.html'),
+    'post_edit': (reverse('posts:post_edit',
+                          kwargs={
+                              'username': TEST_USER_USERNAME,
+                              'post_id': POSTS_COUNT
+                          }), 'posts/create_post.html'),
+    'post_detail': (reverse('posts:post_detail',
+                            kwargs={
+                                'username': TEST_USER_USERNAME,
+                                'post_id': POSTS_COUNT
+                            }), 'posts/post_detail.html')
+}
 
 
 class PostPagesTest(TestCase):
@@ -18,60 +55,54 @@ class PostPagesTest(TestCase):
     def setUpClass(cls):
         super().setUpClass()
 
-        cls.user = User.objects.create_user(username='amogus')
+        cls.user = User.objects.create_user(username=TEST_USER_USERNAME)
         cls.group = Group.objects.create(
-            title='Заголовок',
-            description='Описание',
-            slug='test-slug'
+            title=TEST_GROUP_TITLE,
+            description=TEST_GROUP_DESC,
+            slug=TEST_GROUP_SLUG
         )
         cls.empty_group = Group.objects.create(
-            title='Заголовок',
-            description='Описание',
-            slug='empty_group'
+            title=TEST_GROUP_TITLE,
+            description=TEST_GROUP_DESC,
+            slug=TEST_EMPTY_GROUP_SLUG
         )
-        for i in range(TASK_COUNT):
-            Post.objects.create(
-                author=cls.user,
-                group=cls.group,
-                text='Текст'
-            )
+        posts = [
+            Post(author=cls.user, group=cls.group, text=TEST_POST_TEXT)
+        ] * POSTS_COUNT
+        Post.objects.bulk_create(posts)
 
     def setUp(self):
         self.guest_client = Client()
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
 
-    # Тест на правильность шаблонов
     def test_is_correct_template(self):
-        username = PostPagesTest.user.username
-        group = PostPagesTest.group.slug
-        template_per_page = {
-            reverse('posts:index'): 'posts/index.html',
-            reverse('posts:group',
-                    kwargs={'slug': group}): 'posts/group.html',
-            reverse('posts:profile',
-                    kwargs={'username': username}): 'posts/profile.html',
-            reverse('posts:post_detail',
-                    kwargs={
-                        'username': username,
-                        'post_id': 1
-                    }): 'posts/post_detail.html',
-            reverse('posts:post_create'): 'posts/create_post.html',
-            reverse('posts:post_edit',
-                    kwargs={
-                        'username': username,
-                        'post_id': 1
-                    }): 'posts/create_post.html',
-        }
+        """
+        Тест проверяет, что view-функции используют правильные html шаблоны.
+        """
 
-        for reverse_name, template in template_per_page.items():
+        view_names = (
+            'homepage',
+            'group',
+            'profile',
+            'post_detail',
+            'new_post',
+            'post_edit',
+        )
+
+        for view_name in view_names:
+            reverse_name, template = REQUEST_TEMPLATE_DICT[view_name]
             with self.subTest(template=template):
                 response = self.authorized_client.get(reverse_name)
                 self.assertTemplateUsed(response, template)
 
-    # Тест формы создания поста
     def test_post_create_form(self):
-        response = self.authorized_client.get(reverse('posts:post_create'))
+        """
+        Тест проверяет, что форма создания поста имеет ожидаемые поля ввода.
+        """
+
+        request = REQUEST_TEMPLATE_DICT['new_post'][0]
+        response = self.authorized_client.get(request)
         form_fields = {
             'text': forms.fields.CharField,
             'group': forms.fields.ChoiceField,
@@ -82,14 +113,16 @@ class PostPagesTest(TestCase):
                 field = response.context['form'].fields[field_name]
                 self.assertIsInstance(field, value)
 
-    # Тест формы редактирования поста
     def test_post_edit_form(self):
-        response = self.authorized_client.get(
-            reverse('posts:post_edit',
-                    kwargs={'username': 'amogus', 'post_id': 1})
-        )
+        """
+        Тест проверяет, что форма редактирования поста заполнена
+        актуальными значениями.
+        """
+
+        request = REQUEST_TEMPLATE_DICT['post_edit'][0]
+        response = self.authorized_client.get(request)
         form_fields = {
-            'text': (forms.fields.CharField, 'Текст'),
+            'text': (forms.fields.CharField, TEST_POST_TEXT),
             'group': (forms.fields.ChoiceField, PostPagesTest.group)
         }
 
@@ -99,72 +132,79 @@ class PostPagesTest(TestCase):
                 self.assertIsInstance(field, values[0])
                 self.assertEqual(field.initial, values[1])
 
-    # Тест паджинатора
     def test_paginator(self):
-        left = TASK_COUNT
+        """
+        Тест проверяет, что страица содержит ожидаемое количество
+        элементов.
+        """
+
+        left = POSTS_COUNT
 
         def reqests(page):
-            requests = (
-                reverse('posts:index') + f'?page={page}',
-                reverse('posts:group',
-                        kwargs={'slug': PostPagesTest.group.slug}
-                        ) + f'?page={page}',
-                reverse('posts:profile',
-                        kwargs={'username': PostPagesTest.user.username}
-                        ) + f'?page={page}'
+            view_names = (
+                'homepage',
+                'group',
+                'profile',
             )
-            for request in requests:
+            for view_name in view_names:
+                request = REQUEST_TEMPLATE_DICT[view_name][0] + f'?page={page}'
                 with self.subTest(request=request):
                     response = self.authorized_client.get(request)
                     self.assertEqual(
                         len(response.context['page'].object_list),
-                        min(left, 10)
+                        min(left, POST_PER_PAGE_COUNT)
                     )
         reqests(1)
-        if left % 10 != 0:
-            last_page = ceil(left / 10)
-            left = left % 10
+        if left % POST_PER_PAGE_COUNT != 0:
+            last_page = ceil(left / POST_PER_PAGE_COUNT)
+            left = left % POST_PER_PAGE_COUNT
             reqests(last_page)
         else:
-            last_page = left / 10
-            left = 10
+            last_page = left / POST_PER_PAGE_COUNT
+            left = POST_PER_PAGE_COUNT
             reqests(last_page)
 
-    # Тест контекста страниц паджинатора
     def test_pages_context(self):
-        requests = (
-            reverse('posts:index'),
-            reverse('posts:group',
-                    kwargs={'slug': PostPagesTest.group.slug}),
-            reverse('posts:profile',
-                    kwargs={'username': PostPagesTest.user.username})
+        """
+        Тест проверяет контекст страниц паджинатора.
+        """
+
+        view_names = (
+            'homepage',
+            'group',
+            'profile'
         )
-        for request in requests:
+        for view_name in view_names:
+            request = REQUEST_TEMPLATE_DICT[view_name][0]
             with self.subTest(request=request):
                 response = self.authorized_client.get(request)
                 post = response.context['page'].object_list[0]
-                self.assertEqual(post.text, 'Текст')
-                self.assertEqual(post.group_id, 1)
-                self.assertEqual(post.author_id, 1)
+                self.assertEqual(post.text, TEST_POST_TEXT)
+                self.assertEqual(post.group.title, TEST_GROUP_TITLE)
+                self.assertEqual(post.author.username, TEST_USER_USERNAME)
                 self.assertEqual(post.pub_date.date(),
                                  dt.datetime.now().date())
 
-    # Тест контекста детальной информации поста
     def test_detail_post_info(self):
-        request = reverse('posts:post_detail',
-                          kwargs={'username': 'amogus', 'post_id': 1})
+        """
+        Тест проверяет контекст страницы детальной информации поста.
+        """
+
+        request = REQUEST_TEMPLATE_DICT['post_detail'][0]
         response = self.authorized_client.get(request)
         post = response.context['post']
-        self.assertEqual(post.text, 'Текст')
-        self.assertEqual(post.group_id, 1)
-        self.assertEqual(post.author_id, 1)
+        self.assertEqual(post.text, TEST_POST_TEXT)
+        self.assertEqual(post.group.title, TEST_GROUP_TITLE)
+        self.assertEqual(post.author.username, TEST_USER_USERNAME)
         self.assertEqual(post.pub_date.date(),
                          dt.datetime.now().date())
 
-    # Проверяем, что пустая группа пуста
     def test_empty_group(self):
-        request = reverse('posts:group',
-                          kwargs={'slug': 'empty_group'})
+        """
+        Тест проверяет, что в пустой группе нет постов.
+        """
+
+        request = REQUEST_TEMPLATE_DICT['empty_group'][0]
         response = self.authorized_client.get(request)
         self.assertEqual(
             len(response.context['page'].object_list), 0

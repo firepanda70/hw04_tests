@@ -59,9 +59,7 @@ class Post(models.Model):
         shorten_text = textwrap.shorten(
             text=self.text,
             width=20,
-            placeholder="..."
+            placeholder='...'
         )
         res += f'Текст: {shorten_text}'
         return res
-        # return self.text[0:15]
-        # return textwrap.shorten(text=self.text, width=15)

@@ -1,11 +1,12 @@
-from django.contrib.auth import get_user_model
+"""
+Модуль предназначен для тестирования страниц с формами.
+"""
+
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from posts.models import Post, Group
 from posts.forms import PostForm
-
-User = get_user_model()
+from posts.models import Group, Post, User
 
 
 class PostCreateFormTests(TestCase):
@@ -26,6 +27,10 @@ class PostCreateFormTests(TestCase):
         self.authorized_client.force_login(PostCreateFormTests.user)
 
     def test_create_post(self):
+        """
+        Тест проверяет, работает ли форма для создания поста.
+        """
+
         posts_count = Post.objects.count()
         form_data = {
             'text': 'Текст',
@@ -40,6 +45,10 @@ class PostCreateFormTests(TestCase):
         self.assertEqual(Post.objects.count(), posts_count + 1)
 
     def test_edit_post(self):
+        """
+        Тест проверяет, работает ли форма для редактирования поста.
+        """
+
         form_data = {
             'text': 'Обновленный текст',
             'group-id': 1
