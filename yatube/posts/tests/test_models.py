@@ -12,6 +12,19 @@ from posts.models import Group, Post, User
 TEST_GROUP_TITLE = 'Отряды Понасенкова'
 TEST_GROUP_SLUG = 'genius'
 TEST_GROUP_DESC = 'Аниме-клуб'
+TEST_USER_FIRSTNAME = 'Евгений'
+TEST_USER_LASTNAME = 'Понасенков'
+TEST_USER_USERNAME = 'ponasenkov'
+
+TEST_POST_TEXT = 'Гений ' * 10
+
+TEST_POST_STR_FUNC_FORMAT = (
+    f'Автор: {TEST_USER_FIRSTNAME} {TEST_USER_LASTNAME} '
+    f'({TEST_USER_USERNAME})\n'
+    f'Группа: {TEST_GROUP_TITLE}\n'
+    f'Дата публикации: {dt.datetime.now().date()}\nТекст: '
+    f'{textwrap.shorten( text=TEST_POST_TEXT, width=20, placeholder="..." )}'
+)
 
 
 class GroupModelTest(TestCase):
@@ -51,21 +64,6 @@ class GroupModelTest(TestCase):
         group = GroupModelTest.group
         expected = group.title
         self.assertEqual(str(group), expected)
-
-
-TEST_USER_FIRSTNAME = 'Евгений'
-TEST_USER_LASTNAME = 'Понасенков'
-TEST_USER_USERNAME = 'ponasenkov'
-
-TEST_POST_TEXT = 'Гений ' * 10
-
-TEST_POST_STR_FUNC_FORMAT = (
-    f'Автор: {TEST_USER_FIRSTNAME} {TEST_USER_LASTNAME} '
-    f'({TEST_USER_USERNAME})\n'
-    f'Группа: {TEST_GROUP_TITLE}\n'
-    f'Дата публикации: {dt.datetime.now().date()}\nТекст: '
-    f'{textwrap.shorten( text=TEST_POST_TEXT, width=20, placeholder="..." )}'
-)
 
 
 class PostModelTest(TestCase):
